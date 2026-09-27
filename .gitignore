@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+.vercel
+.wrangler
+.omo/
+*.log
+*.tsbuildinfo
+.DS_Store
+evidence/
