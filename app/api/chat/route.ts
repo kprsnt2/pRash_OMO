@@ -43,15 +43,6 @@ async function hydrateAttachments(messages: ChatBody["messages"]): Promise<ChatM
   );
 }
 
-function metaEvent(entry: ChainEntry, attempts: ReturnType<typeof Array.prototype.slice>, skipped: unknown[]) {
-  return {
-    type: "meta" as const,
-    served: { provider: entry.provider, label: entry.label, model: entry.model },
-    attempts,
-    skipped,
-  };
-}
-
 export async function POST(request: Request) {
   let body: ChatBody;
   try {

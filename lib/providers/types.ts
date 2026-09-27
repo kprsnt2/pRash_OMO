@@ -56,14 +56,3 @@ export interface ProviderAdapter {
   /** yields text deltas from an SSE response body */
   parse(stream: ReadableStream<Uint8Array>): AsyncGenerator<string, void, unknown>;
 }
-
-export class ProviderHttpError extends Error {
-  status: number;
-  detail: string;
-  constructor(status: number, detail: string) {
-    super(`provider http ${status}`);
-    this.name = "ProviderHttpError";
-    this.status = status;
-    this.detail = detail.slice(0, 800);
-  }
-}

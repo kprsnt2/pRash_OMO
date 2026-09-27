@@ -281,16 +281,8 @@ export function ChatApp() {
     [agentId, busy, flush, messages, model, persist, privacy, provider, pushDelta],
   );
 
-  const onStarter = useCallback((text: string) => {
-    setMessages((prev) => prev);
-    const textarea = document.querySelector("textarea");
-    if (textarea instanceof HTMLTextAreaElement) {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-      setter?.call(textarea, text);
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-      textarea.focus();
-    }
-  }, []);
+  const [draft, setDraft] = useState("");
+  const consumeDraft = useCallback(() => setDraft(""), []);
 
   const starterTexts = agent?.starters ?? [];
 
@@ -420,7 +412,9 @@ export function ChatApp() {
           disabled={!config.anyProviderKey}
           disabledReason={config.anyProviderKey ? undefined : "Add a provider key to .env.local, then restart the dev server."}
           starters={messages.length === 0 ? starterTexts : []}
-          onStarter={onStarter}
+          onStarter={setDraft}
+          draft={draft}
+          onDraftUsed={consumeDraft}
         />
       </main>
     </div>

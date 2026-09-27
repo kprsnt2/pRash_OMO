@@ -102,6 +102,30 @@ try {
     return clicked ? "js-fallback" : "MISS";
   }
 
+  const starterDeadline = Date.now() + 20_000;
+  let firstStarter = "";
+  while (Date.now() < starterDeadline) {
+    firstStarter = await page.evaluate(() =>
+      [...document.querySelectorAll("button")]
+        .map((b) => (b.textContent ?? "").trim())
+        .find((t) => t.startsWith("Draft a polite message")) ?? "",
+    );
+    if (firstStarter) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  record("starter chip visible", firstStarter);
+  record("click starter chip", await clickText("Draft a polite message", ['button:has-text("Draft a polite message")']));
+  await new Promise((r) => setTimeout(r, 300));
+  const draftValue = await page.evaluate(() => document.querySelector("textarea")?.value ?? "");
+  record("starter filled the composer", { starter: firstStarter, draftValue, match: draftValue.startsWith("Draft a polite message") });
+  await page.evaluate(() => {
+    const textarea = document.querySelector("textarea");
+    if (!textarea) return;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(textarea, "");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
   record("click agent picker", await clickText("Genie", ['button:has-text("Genie")', "header button"]));
   await new Promise((r) => setTimeout(r, 300));
   const shotPicker = await page.screenshot();
@@ -181,7 +205,7 @@ try {
   record("attachment chips", composerChips);
   record("user bubble", userBubble);
 
-  ok = replyText.includes("Hello from the mock");
+  ok = replyText.includes("Hello from the mock") && draftValue.startsWith("Draft a polite message");
 } catch (error) {
   record("ERROR", error instanceof Error ? `${error.message}\n${error.stack?.slice(0, 600)}` : String(error));
 } finally {

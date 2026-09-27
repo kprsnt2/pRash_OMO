@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TOTAL_ATTACHMENT_BYTES, attachmentsBudget, humanSize, readPickedFiles, type PickedFile } from "@/lib/client/files";
 
 const ACCEPT =
@@ -14,6 +14,8 @@ export function Composer({
   disabledReason,
   starters,
   onStarter,
+  draft,
+  onDraftUsed,
 }: {
   onSend: (text: string, files: PickedFile[]) => void;
   onStop: () => void;
@@ -22,12 +24,22 @@ export function Composer({
   disabledReason?: string;
   starters: string[];
   onStarter: (text: string) => void;
+  draft: string;
+  onDraftUsed: () => void;
 }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!draft) return;
+    setText(draft);
+    onDraftUsed();
+    textRef.current?.focus();
+  }, [draft, onDraftUsed]);
 
   async function addFiles(incoming: FileList | File[]) {
     if (disabled) return;
@@ -151,6 +163,7 @@ export function Composer({
           }}
         />
         <textarea
+          ref={textRef}
           value={text}
           disabled={disabled}
           rows={1}
