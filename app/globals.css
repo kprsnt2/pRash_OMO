@@ -1,0 +1,214 @@
+@import "tailwindcss";
+@import "highlight.js/styles/github-dark.css";
+
+@theme {
+  --color-void: #070b10;
+  --color-panel: #0d141d;
+  --color-panel2: #121b26;
+  --color-line: #1e2a38;
+  --color-ink: #e8eef6;
+  --color-muted: #93a6bb;
+  --color-accent: #5eead4;
+  --color-accent2: #8aa2ff;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(94, 234, 212, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(138, 162, 255, 0.08), transparent 55%),
+    var(--color-void);
+  color: var(--color-ink);
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #24313f transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #223040;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+textarea {
+  field-sizing: content;
+}
+
+/* ---------- markdown ---------- */
+.md {
+  font-size: 15px;
+  line-height: 1.72;
+  word-break: break-word;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 1.2em 0 0.5em;
+}
+.md h1 {
+  font-size: 1.4em;
+}
+.md h2 {
+  font-size: 1.22em;
+}
+.md h3 {
+  font-size: 1.08em;
+}
+.md p {
+  margin: 0.65em 0;
+}
+.md ul,
+.md ol {
+  margin: 0.65em 0 0.65em 1.25em;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.25em 0;
+}
+.md a {
+  color: var(--color-accent2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md blockquote {
+  border-left: 3px solid var(--color-line);
+  padding-left: 0.85em;
+  margin: 0.8em 0;
+  color: var(--color-muted);
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  margin: 1.2em 0;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.9em 0;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  font-size: 0.94em;
+}
+.md th,
+.md td {
+  border: 1px solid var(--color-line);
+  padding: 0.42em 0.6em;
+  text-align: left;
+  vertical-align: top;
+}
+.md th {
+  background: #16202c;
+  font-weight: 600;
+}
+.md-inline-code {
+  background: #1a2431;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+  font-size: 0.88em;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+.code-block {
+  margin: 0.9em 0;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b1119;
+}
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35em 0.7em;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-line);
+  background: #101825;
+}
+.code-head button {
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  color: var(--color-accent);
+}
+.code-block pre {
+  margin: 0;
+  padding: 0.8em 0.9em;
+  overflow-x: auto;
+}
+.code-block code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 12.8px;
+  line-height: 1.6;
+  background: transparent;
+}
+
+/* ---------- misc ---------- */
+.scroll-fade {
+  mask-image: linear-gradient(to bottom, transparent, #000 14px, #000 calc(100% - 8px), transparent);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--color-line);
+  background: #131c27;
+  border-radius: 10px;
+  padding: 0.3rem 0.5rem;
+  font-size: 12px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+.caret {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background: var(--color-accent);
+  animation: blink 1s steps(2, start) infinite;
+  vertical-align: -2px;
+  border-radius: 2px;
+}
