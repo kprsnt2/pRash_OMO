@@ -1,4 +1,4 @@
-# OneChat
+# OneChat AI
 
 A personal, all-in-one chat app: pick an **agent** (persona/plugin), pick a **model tier**, attach as many
 files as you want, and get streamed answers. Built because ChatGPT and Claude choke on many attachments at once.
