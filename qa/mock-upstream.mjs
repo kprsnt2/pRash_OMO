@@ -7,6 +7,8 @@ const state = {
   groqFail: false,
   emptyOpenai: false,
   geminiFail: false,
+  // real OpenAI rejects max_tokens on current models, so the mock does too by default
+  openaiStrictParams: true,
 };
 
 const counts = { openai: 0, nvidia: 0, groq: 0, gemini: 0 };
@@ -15,6 +17,20 @@ const lastBodies = { openai: null, nvidia: null, groq: null, gemini: null };
 function record(provider, body) {
   counts[provider] += 1;
   lastBodies[provider] = body;
+}
+
+function maxTokensError() {
+  return Response.json(
+    {
+      error: {
+        message: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+        type: "invalid_request_error",
+        param: "max_tokens",
+        code: "unsupported_parameter",
+      },
+    },
+    { status: 400 },
+  );
 }
 
 function summary(body) {
@@ -130,7 +146,7 @@ const server = Bun.serve({
     if (path === "/__reset") {
       for (const key of Object.keys(counts)) counts[key] = 0;
       for (const key of Object.keys(lastBodies)) lastBodies[key] = null;
-      Object.assign(state, { openaiFail: false, openaiFailOnce: false, nvidiaFail: false, groqFail: false, geminiFail: false, emptyOpenai: false });
+      Object.assign(state, { openaiFail: false, openaiFailOnce: false, nvidiaFail: false, groqFail: false, geminiFail: false, emptyOpenai: false, openaiStrictParams: true });
       return Response.json({ ok: true });
     }
 
@@ -138,6 +154,10 @@ const server = Bun.serve({
     const geminiModel = path.match(/models\/([^:]+):/)?.[1] ?? "gemini-flash-latest";
 
     if (path.startsWith("/openai/")) {
+      if (state.openaiStrictParams && body?.max_tokens) {
+        record("openai", body);
+        return maxTokensError();
+      }
       if (state.openaiFail || state.openaiFailOnce) {
         state.openaiFailOnce = false;
         record("openai", body);
