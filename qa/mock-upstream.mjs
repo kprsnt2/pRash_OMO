@@ -49,6 +49,25 @@ function summary(body) {
   };
 }
 
+function lastUserText(body) {
+  const messages = body?.messages ?? body?.contents ?? [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const content = messages[i].content;
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) return content.map((p) => p.text ?? "").join(" ");
+    const parts = messages[i].parts;
+    if (Array.isArray(parts)) return parts.map((p) => p.text ?? "").join(" ");
+  }
+  return "";
+}
+
+const WORKSHEET_CHUNKS = [
+  "Class 4 Maths - Multiplication (20 marks)\n\nAnswer all questions.\n\n",
+  "1. 6 x 7 = ____\n\n2. 8 x 9 = ____\n\n3. 12 x 4 = ____\n\n",
+  "---\n\n",
+  "Answer key\n\n1. 42\n\n2. 72\n\n3. 48\n",
+];
+
 function openaiStream(chunks) {
   return new ReadableStream({
     start(controller) {
@@ -127,6 +146,7 @@ const server = Bun.serve({
       record("openai", body);
       if (state.emptyOpenai) return sseResponse(openaiStream([]));
       const model = body?.model ?? "gpt-5.4-mini";
+      if (/worksheet/i.test(lastUserText(body))) return sseResponse(openaiStream(WORKSHEET_CHUNKS));
       return sseResponse(openaiStream(["MOCK-OK ", `[openai:${model}] `, "Hello from the mock OpenAI rung."]));
     }
 
@@ -145,6 +165,7 @@ const server = Bun.serve({
         return new Response("mock groq down", { status: 503 });
       }
       record("groq", body);
+      if (/worksheet/i.test(lastUserText(body))) return sseResponse(openaiStream(WORKSHEET_CHUNKS));
       return sseResponse(openaiStream(["MOCK-OK [groq] hello."]));
     }
 
