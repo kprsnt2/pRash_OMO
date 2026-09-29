@@ -61,6 +61,42 @@ describe("openai-compatible adapter", () => {
     expect(body.stream).toBe(true);
   });
 
+  test("asks a current OpenAI model for max_completion_tokens, never max_tokens", () => {
+    const body = openaiAdapter.body(entry(), request({ maxTokens: 3000 })) as Record<string, unknown>;
+    expect(body.max_completion_tokens).toBe(3000);
+    expect("max_tokens" in body).toBe(false);
+  });
+
+  test("drops temperature on reasoning models and keeps it elsewhere", () => {
+    expect("temperature" in (openaiAdapter.body(entry(), request({ maxTokens: 100 })) as Record<string, unknown>)).toBe(false);
+
+    const legacy = entry({ id: "openai:gpt-4.1-mini", model: "gpt-4.1-mini" });
+    const withTemp = openaiAdapter.body(legacy, request({ temperature: 0.5, maxTokens: 3000 })) as Record<string, unknown>;
+    expect(withTemp.temperature).toBe(0.5);
+    expect(withTemp.max_completion_tokens).toBe(3000);
+  });
+
+  test("keeps max_tokens and temperature for the compatible third-party servers", () => {
+    const groq = entry({ provider: "groq", id: "groq:llama-3.3-70b-versatile", model: "llama-3.3-70b-versatile", endpoint: "https://api.groq.com/openai/v1", apiKey: "qk" });
+    const body = openaiAdapter.body(groq, request({ temperature: 0.3, maxTokens: 3000 })) as Record<string, unknown>;
+    expect(body.max_tokens).toBe(3000);
+    expect("max_completion_tokens" in body).toBe(false);
+    expect(body.temperature).toBe(0.3);
+  });
+
+  test("an env override restores max_tokens for a gateway that needs it", () => {
+    const previous = process.env.OPENAI_TOKEN_PARAM;
+    process.env.OPENAI_TOKEN_PARAM = "max_tokens";
+    try {
+      const body = openaiAdapter.body(entry(), request({ maxTokens: 3000 })) as Record<string, unknown>;
+      expect(body.max_tokens).toBe(3000);
+      expect("max_completion_tokens" in body).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.OPENAI_TOKEN_PARAM;
+      else process.env.OPENAI_TOKEN_PARAM = previous;
+    }
+  });
+
   test("parses streaming deltas and ignores keep-alives", async () => {
     const frames = [
       'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',

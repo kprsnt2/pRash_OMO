@@ -1,6 +1,23 @@
 import type { ChatMessage, ChainEntry, ChatRequest, ProviderAdapter } from "./types";
 import { jsonFromSseData, sseDataLines } from "./sse";
 
+type EnvLike = Record<string, string | undefined>;
+
+/**
+ * OpenAI's current models reject `max_tokens` and want `max_completion_tokens`; the compatible
+ * third-party servers (NVIDIA NIM, Groq) and older gateways still expect `max_tokens`.
+ */
+export function tokenParameter(entry: ChainEntry, env: EnvLike = process.env): "max_tokens" | "max_completion_tokens" {
+  if (entry.provider !== "openai") return "max_tokens";
+  return env.OPENAI_TOKEN_PARAM === "max_tokens" ? "max_tokens" : "max_completion_tokens";
+}
+
+/** Reasoning models accept only the default temperature, so an agent's value is dropped for them. */
+export function temperatureFor(entry: ChainEntry, req: ChatRequest): number | undefined {
+  if (entry.provider === "openai" && /^(gpt-5|o[1-9])/i.test(entry.model)) return undefined;
+  return req.temperature ?? 0.7;
+}
+
 function fileNote(name: string, mime: string, text: string): string {
   return `\n\n[Attached file: ${name} (${mime})]\n${text}`;
 }
@@ -38,13 +55,16 @@ export const openaiAdapter: ProviderAdapter = {
     body: JSON.stringify(openaiAdapter.body(entry, req)),
     signal: req.signal,
   }),
-  body: (entry: ChainEntry, req: ChatRequest) => ({
-    model: entry.model,
-    messages: openaiMessages(req),
-    stream: true,
-    temperature: req.temperature ?? 0.7,
-    ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
-  }),
+  body: (entry: ChainEntry, req: ChatRequest) => {
+    const temperature = temperatureFor(entry, req);
+    return {
+      model: entry.model,
+      messages: openaiMessages(req),
+      stream: true,
+      ...(temperature === undefined ? {} : { temperature }),
+      ...(req.maxTokens ? { [tokenParameter(entry)]: req.maxTokens } : {}),
+    };
+  },
   async *parse(stream: ReadableStream<Uint8Array>) {
     for await (const data of sseDataLines(stream)) {
       const payload = jsonFromSseData<{
