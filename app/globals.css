@@ -10,10 +10,39 @@
   --color-muted: #93a6bb;
   --color-accent: #5eead4;
   --color-accent2: #8aa2ff;
+  --color-onaccent: #04231f;
+  --color-tablehead: #16202c;
+  --color-glow1: rgba(94, 234, 212, 0.06);
+  --color-glow2: rgba(138, 162, 255, 0.08);
+  /* code surfaces stay dark in both themes, so they read the same on a light page */
+  --color-code: #0b1119;
+  --color-codehead: #101825;
+  --color-codeink: #e8eef6;
+  --color-codemuted: #93a6bb;
+  --color-codeaccent: #5eead4;
+}
+
+:root[data-theme="light"] {
+  --color-void: #f4f6fa;
+  --color-panel: #ffffff;
+  --color-panel2: #eef2f8;
+  --color-line: #d6deea;
+  --color-ink: #101a24;
+  --color-muted: #55647a;
+  --color-accent: #0f766e;
+  --color-accent2: #3b56d4;
+  --color-onaccent: #ffffff;
+  --color-tablehead: #e9eef6;
+  --color-glow1: rgba(15, 118, 110, 0.07);
+  --color-glow2: rgba(59, 86, 212, 0.07);
 }
 
 :root {
   color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 html,
@@ -23,8 +52,8 @@ body {
 
 body {
   background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(94, 234, 212, 0.06), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(138, 162, 255, 0.08), transparent 55%),
+    radial-gradient(1200px 600px at 15% -10%, var(--color-glow1), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, var(--color-glow2), transparent 55%),
     var(--color-void);
   color: var(--color-ink);
   font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
@@ -33,7 +62,7 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #24313f transparent;
+  scrollbar-color: var(--color-line) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -41,7 +70,7 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #223040;
+  background: var(--color-line);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;
@@ -128,11 +157,11 @@ textarea {
   vertical-align: top;
 }
 .md th {
-  background: #16202c;
+  background: var(--color-tablehead);
   font-weight: 600;
 }
 .md-inline-code {
-  background: #1a2431;
+  background: var(--color-panel2);
   border: 1px solid var(--color-line);
   border-radius: 6px;
   padding: 0.1em 0.35em;
@@ -144,7 +173,7 @@ textarea {
   border: 1px solid var(--color-line);
   border-radius: 12px;
   overflow: hidden;
-  background: #0b1119;
+  background: var(--color-code);
 }
 .code-head {
   display: flex;
@@ -154,15 +183,15 @@ textarea {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--color-muted);
+  color: var(--color-codemuted);
   border-bottom: 1px solid var(--color-line);
-  background: #101825;
+  background: var(--color-codehead);
 }
 .code-head button {
   text-transform: none;
   letter-spacing: 0;
   cursor: pointer;
-  color: var(--color-accent);
+  color: var(--color-codeaccent);
 }
 .code-block pre {
   margin: 0;
@@ -185,7 +214,7 @@ textarea {
   align-items: center;
   gap: 0.4rem;
   border: 1px solid var(--color-line);
-  background: #131c27;
+  background: var(--color-panel2);
   border-radius: 10px;
   padding: 0.3rem 0.5rem;
   font-size: 12px;
@@ -211,4 +240,91 @@ button:disabled {
   animation: blink 1s steps(2, start) infinite;
   vertical-align: -2px;
   border-radius: 2px;
+}
+
+/* ---------- printable worksheet ---------- */
+.print-sheet .md {
+  color: #111;
+}
+.print-sheet .md a {
+  color: #1d4ed8;
+}
+.print-sheet .md blockquote {
+  color: #374151;
+  border-color: #d1d5db;
+}
+.print-sheet .md hr {
+  border-color: #d1d5db;
+}
+.print-sheet .md th,
+.print-sheet .md td {
+  border-color: #d1d5db;
+}
+.print-sheet .md th {
+  background: #f3f4f6;
+}
+.print-sheet .md-inline-code {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #111;
+}
+.print-sheet .code-block {
+  background: #f8fafc;
+  border-color: #d1d5db;
+}
+.print-sheet .code-head {
+  background: #f1f5f9;
+  border-color: #d1d5db;
+  color: #475569;
+}
+.print-sheet .code-head button {
+  display: none;
+}
+.print-sheet .code-block code,
+.print-sheet .hljs {
+  background: transparent;
+  color: #111;
+}
+
+@media print {
+  html,
+  body {
+    height: auto;
+  }
+  body {
+    background: #fff;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-overlay {
+    position: static;
+    padding: 0;
+    overflow: visible;
+    background: #fff;
+  }
+  .print-sheet,
+  .print-sheet * {
+    visibility: visible;
+  }
+  .print-sheet {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .print-hide {
+    display: none !important;
+  }
+  .print-answers {
+    break-before: page;
+  }
+  .app-shell {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  @page {
+    margin: 14mm;
+  }
 }

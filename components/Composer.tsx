@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { TOTAL_ATTACHMENT_BYTES, attachmentsBudget, humanSize, readPickedFiles, type PickedFile } from "@/lib/client/files";
+import { useSpeechRecognition } from "@/lib/client/useSpeechRecognition";
 
 const ACCEPT =
   "image/*,.pdf,.txt,.md,.markdown,.csv,.json,.log,.xml,.html,.yml,.yaml,.ts,.tsx,.js,.py,.sql,application/pdf,text/plain,text/csv,application/json";
 
 export function Composer({
+  agentName,
   onSend,
   onStop,
   busy,
@@ -17,6 +19,7 @@ export function Composer({
   draft,
   onDraftUsed,
 }: {
+  agentName?: string;
   onSend: (text: string, files: PickedFile[]) => void;
   onStop: () => void;
   busy: boolean;
@@ -31,8 +34,18 @@ export function Composer({
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState("");
+  const [interim, setInterim] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+
+  const speech = useSpeechRecognition({
+    onFinal: (transcript) => {
+      setInterim("");
+      setText((previous) => (previous ? `${previous} ${transcript}` : transcript));
+    },
+    onInterim: setInterim,
+    onError: setNotice,
+  });
 
   useEffect(() => {
     if (!draft) return;
@@ -65,6 +78,7 @@ export function Composer({
   function submit() {
     const hasText = text.trim().length > 0;
     if ((!hasText && files.length === 0) || busy || disabled) return;
+    speech.stop();
     onSend(text, files);
     setText("");
     setFiles([]);
@@ -75,7 +89,7 @@ export function Composer({
 
   return (
     <div
-      className="relative border-t border-line bg-panel/60 px-3 pb-3 pt-3 backdrop-blur sm:px-5"
+      className="relative border-t border-line bg-panel px-3 pb-3 pt-3 sm:px-5"
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -88,13 +102,13 @@ export function Composer({
       }}
     >
       {disabled && disabledReason ? (
-        <p className="mx-auto mb-2 max-w-3xl rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+        <p className="mb-2 w-full rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
           {disabledReason}
         </p>
       ) : null}
 
       {files.length > 0 ? (
-        <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2">
+        <div className="mb-2 flex w-full flex-wrap items-center gap-2">
           {files.map((file) => (
             <span key={file.id} className="chip">
               {file.kind === "image" && file.previewUrl ? (
@@ -116,13 +130,13 @@ export function Composer({
             </span>
           ))}
           <span className="text-[11px] text-muted">
-            {files.length} file(s) \u00B7 {humanSize(totalSize)}
+            {files.length} file(s) {"\u00B7"} {humanSize(totalSize)}
           </span>
         </div>
       ) : null}
 
       {starters.length > 0 && text.length === 0 && files.length === 0 ? (
-        <div className="mx-auto mb-2 flex max-w-3xl flex-wrap gap-2">
+        <div className="mb-2 flex w-full flex-wrap gap-2">
           {starters.map((starter) => (
             <button
               key={starter}
@@ -136,10 +150,11 @@ export function Composer({
         </div>
       ) : null}
 
-      {notice ? <p className="mx-auto mb-2 max-w-3xl text-xs text-amber-300">{notice}</p> : null}
+      {notice ? <p className="mb-2 w-full text-xs text-amber-300">{notice}</p> : null}
+      {interim ? <p className="mb-2 w-full text-xs italic text-muted">{interim}</p> : null}
 
       <div
-        className={`mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-panel2 p-2 transition ${dragging ? "border-accent" : "border-line"}`}
+        className={`flex w-full items-end gap-2 rounded-2xl border bg-panel2 p-2 transition ${dragging ? "border-accent" : "border-line"}`}
       >
         <button
           type="button"
@@ -150,6 +165,20 @@ export function Composer({
         >
           <span className="text-lg leading-none">+</span>
         </button>
+        {speech.supported ? (
+          <button
+            type="button"
+            onClick={speech.toggle}
+            disabled={disabled}
+            title={speech.listening ? "Stop dictation" : "Speak your message"}
+            aria-label={speech.listening ? "Stop dictation" : "Speak your message"}
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${
+              speech.listening ? "border-red-400/60 bg-red-400/10 text-red-300" : "border-line text-muted hover:border-accent/60 hover:text-ink"
+            }`}
+          >
+            <span aria-hidden>{speech.listening ? "\u25A0" : "\u{1F3A4}"}</span>
+          </button>
+        ) : null}
         <input
           ref={fileRef}
           type="file"
@@ -203,7 +232,12 @@ export function Composer({
           </button>
         )}
       </div>
-      <p className="mx-auto mt-2 max-w-3xl text-[11px] text-muted/70">
+      {agentName ? (
+        <p className="mt-2 text-[11px] text-muted/70">
+          Replying as {agentName} {"\u00B7"} switch agent in the header any time, mid-chat.
+        </p>
+      ) : null}
+      <p className="mt-2 w-full text-[11px] text-muted/70">
         Attachments: images, PDFs and text files, many at once. PDFs and text are extracted on the server before the model sees them.
       </p>
     </div>

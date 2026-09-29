@@ -6,7 +6,9 @@ import { Composer } from "./Composer";
 import { MessageBubble } from "./MessageBubble";
 import { ModelPicker } from "./ModelPicker";
 import { Sidebar } from "./Sidebar";
+import { ThemeToggle } from "./ThemeToggle";
 import { readChatStream } from "@/lib/client/sse";
+import { cancelSpeech, primeVoices, speakText } from "@/lib/client/speech";
 import type { ConfigResponse, UiMessage } from "@/lib/client/types";
 import type { PickedFile } from "@/lib/client/files";
 import {
@@ -19,9 +21,12 @@ import {
   type StoredMessage,
 } from "@/lib/storage/local";
 
+const VOICE_KEY = "onechat.voice";
+
 const EMPTY_CONFIG: ConfigResponse = {
   agents: [],
   chain: [],
+  models: [],
   privacySafeProviders: [],
   authRequired: false,
   anyProviderKey: true,
@@ -39,10 +44,13 @@ function toStored(messages: UiMessage[]): StoredMessage[] {
     id: m.id,
     role: m.role,
     content: m.content,
-    attachments: (m.attachments ?? []).map((a) => ({ id: a.id, name: a.name, mime: a.mime, kind: a.kind, size: a.size })),
+    attachments: (m.attachments ?? []).map((a) => ({ id: a.id, name: a.name, mime: a.mime, kind: a.kind, size: a.size, text: a.text })),
     served: m.served,
     attempts: m.attempts,
+    skipped: m.skipped,
     error: m.error,
+    elapsedMs: m.elapsedMs,
+    agentId: m.agentId,
     createdAt: m.createdAt,
   }));
 }
@@ -55,7 +63,10 @@ function fromStored(stored: StoredMessage[]): UiMessage[] {
     attachments: (m.attachments ?? []).map((a) => ({ ...a })),
     served: m.served,
     attempts: m.attempts,
+    skipped: m.skipped,
     error: m.error,
+    elapsedMs: m.elapsedMs,
+    agentId: m.agentId,
     createdAt: m.createdAt,
   }));
 }
@@ -67,6 +78,8 @@ export function ChatApp() {
   const [provider, setProvider] = useState("auto");
   const [model, setModel] = useState("auto");
   const [privacy, setPrivacy] = useState(false);
+  const [voice, setVoice] = useState(false);
+  const voiceRef = useRef(false);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -80,6 +93,31 @@ export function ChatApp() {
 
   useEffect(() => {
     setActiveId(crypto.randomUUID());
+  }, []);
+
+  useEffect(() => {
+    let wanted = false;
+    try {
+      wanted = localStorage.getItem(VOICE_KEY) === "on";
+    } catch {
+      /* private mode: voice defaults to off each visit */
+    }
+    setVoice(wanted);
+    voiceRef.current = wanted;
+    if (wanted) primeVoices();
+  }, []);
+
+  const toggleVoice = useCallback(() => {
+    const next = !voiceRef.current;
+    voiceRef.current = next;
+    setVoice(next);
+    try {
+      localStorage.setItem(VOICE_KEY, next ? "on" : "off");
+    } catch {
+      /* private mode: the choice lasts for this page only */
+    }
+    if (next) primeVoices();
+    else cancelSpeech();
   }, []);
 
   useEffect(() => {
@@ -181,11 +219,12 @@ export function ChatApp() {
       const nextMessages: UiMessage[] = [
         ...history,
         userMessage,
-        { id: assistantId, role: "assistant", content: "", createdAt: Date.now() },
+        { id: assistantId, role: "assistant", content: "", agentId, createdAt: Date.now() },
       ];
       setMessages(nextMessages);
       setBusy(true);
       setStreamingId(assistantId);
+      const startedAt = Date.now();
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -205,7 +244,12 @@ export function ChatApp() {
         })),
       };
 
-      let finalMessages = nextMessages;
+      let spoken = "";
+      let served: UiMessage["served"];
+      let attempts: UiMessage["attempts"];
+      let skipped: UiMessage["skipped"];
+      let streamError = "";
+      let userAttachments = userMessage.attachments ?? [];
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
@@ -220,62 +264,64 @@ export function ChatApp() {
             attempts?: UiMessage["attempts"];
             skipped?: UiMessage["skipped"];
           };
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, error: data.error ?? `Request failed (HTTP ${response.status})`, attempts: data.attempts, skipped: data.skipped }
-                : m,
-            ),
-          );
+          streamError = data.error ?? `Request failed (HTTP ${response.status})`;
+          attempts = data.attempts;
+          skipped = data.skipped;
           return;
         }
 
         for await (const event of readChatStream(response)) {
           if (event.type === "meta") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId ? { ...m, served: event.served, attempts: event.attempts, skipped: event.skipped } : m,
-              ),
-            );
+            served = event.served;
+            attempts = event.attempts;
+            skipped = event.skipped;
           } else if (event.type === "extract") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === userMessage.id
-                  ? {
-                      ...m,
-                      attachments: (m.attachments ?? []).map((a, index) => ({
-                        ...a,
-                        text: event.attachments[index]?.text ?? a.text,
-                        kind: event.attachments[index]?.kind ?? a.kind,
-                      })),
-                    }
-                  : m,
-              ),
-            );
+            userAttachments = userAttachments.map((a, index) => ({
+              ...a,
+              text: event.attachments[index]?.text ?? a.text,
+              kind: event.attachments[index]?.kind ?? a.kind,
+            }));
+            setMessages((prev) => prev.map((m) => (m.id === userMessage.id ? { ...m, attachments: userAttachments } : m)));
           } else if (event.type === "delta") {
+            spoken += event.text;
             pushDelta(assistantId, event.text);
           } else if (event.type === "error") {
             flush(assistantId);
-            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, error: event.message } : m)));
+            streamError = event.message;
           }
         }
       } catch (error) {
-        if (!controller.signal.aborted) {
-          const message = error instanceof Error ? error.message : "network error";
-          setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, error: message } : m)));
+        if (controller.signal.aborted) {
+          if (!spoken) spoken = "_Stopped._";
         } else {
-          setMessages((prev) => prev.map((m) => (m.id === assistantId && !m.content ? { ...m, content: "_Stopped._" } : m)));
+          streamError = error instanceof Error ? error.message : "network error";
         }
       } finally {
         flush(assistantId);
         setBusy(false);
         setStreamingId(null);
         abortRef.current = null;
-        setMessages((prev) => {
-          finalMessages = prev;
-          return prev;
-        });
+        // Built from the collected stream rather than read back from a state updater, so what is
+        // saved is exactly what the user saw.
+        const finalMessages: UiMessage[] = [
+          ...history,
+          { ...userMessage, attachments: userAttachments },
+          {
+            id: assistantId,
+            role: "assistant",
+            content: spoken,
+            served,
+            attempts,
+            skipped,
+            error: streamError || undefined,
+            elapsedMs: Date.now() - startedAt,
+            agentId,
+            createdAt: Date.now(),
+          },
+        ];
+        setMessages(finalMessages);
         void persist(finalMessages, agentId);
+        if (voiceRef.current && spoken) speakText(spoken);
       }
     },
     [agentId, busy, flush, messages, model, persist, privacy, provider, pushDelta],
@@ -287,7 +333,7 @@ export function ChatApp() {
   const starterTexts = agent?.starters ?? [];
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="app-shell flex h-dvh overflow-hidden">
       <Sidebar
         open={sidebarOpen}
         conversations={conversations}
@@ -318,6 +364,13 @@ export function ChatApp() {
           }
         }}
         onExport={async () => downloadJson(await exportConversations(), `onechat-export-${Date.now()}.json`)}
+        onExportOne={async (id) => {
+          const all = await exportConversations();
+          const one = all.find((c) => c.id === id);
+          if (!one) return;
+          const slug = one.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+          downloadJson([one], `onechat-${slug || "chat"}.json`);
+        }}
         onImport={async (file) => {
           try {
             const parsed = JSON.parse(await file.text()) as StoredConversation[];
@@ -332,7 +385,7 @@ export function ChatApp() {
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center gap-2 border-b border-line bg-panel/50 px-3 py-3 backdrop-blur sm:px-5">
+        <header className="relative z-40 flex flex-wrap items-center gap-2 border-b border-line bg-panel px-3 py-3 sm:px-5">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -344,6 +397,7 @@ export function ChatApp() {
           <AgentPicker agents={config.agents} value={agentId} onChange={setAgentId} needsVision={needsVision} />
           <ModelPicker
             chain={config.chain}
+            models={config.models}
             provider={provider}
             model={model}
             privacy={privacy}
@@ -352,22 +406,37 @@ export function ChatApp() {
               setModel(next.model);
             }}
           />
-          <button
-            type="button"
-            onClick={() => {
-              setPrivacy((v) => !v);
-              setProvider("auto");
-              setModel("auto");
-            }}
-            className={`ml-auto flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
-              privacy ? "border-accent/60 bg-accent/10 text-accent" : "border-line bg-panel2 text-muted hover:text-ink"
-            }`}
-            title="Privacy mode routes only to Gemini (your paid key, no training on your data) and stops saving chats"
-          >
-            <span>{privacy ? "\u{1F512}" : "\u{1F513}"}</span>
-            <span className="hidden sm:inline">Privacy mode</span>
-            <span className="sm:hidden">{privacy ? "on" : "off"}</span>
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleVoice}
+              aria-pressed={voice}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                voice ? "border-accent/60 bg-accent/10 text-accent" : "border-line bg-panel2 text-muted hover:text-ink"
+              }`}
+              title="Read every reply aloud"
+            >
+              <span aria-hidden>{voice ? "\u{1F50A}" : "\u{1F509}"}</span>
+              <span className="hidden sm:inline">Voice</span>
+            </button>
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => {
+                setPrivacy((v) => !v);
+                setProvider("auto");
+                setModel("auto");
+              }}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                privacy ? "border-accent/60 bg-accent/10 text-accent" : "border-line bg-panel2 text-muted hover:text-ink"
+              }`}
+              title="Privacy mode routes only to Gemini (your paid key, no training on your data) and stops saving chats"
+            >
+              <span>{privacy ? "\u{1F512}" : "\u{1F513}"}</span>
+              <span className="hidden sm:inline">Privacy mode</span>
+              <span className="sm:hidden">{privacy ? "on" : "off"}</span>
+            </button>
+          </div>
         </header>
 
         {configError ? (
@@ -385,7 +454,7 @@ export function ChatApp() {
         ) : null}
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-fade px-3 py-5 sm:px-6">
-          <div className="mx-auto flex max-w-3xl flex-col gap-5">
+          <div className="flex w-full flex-col gap-5">
             {messages.length === 0 ? (
               <div className="rounded-2xl border border-line bg-panel/60 p-6">
                 <div className="text-2xl">{agent?.emoji ?? "\u{2728}"}</div>
@@ -399,13 +468,19 @@ export function ChatApp() {
               </div>
             ) : (
               messages.map((message) => (
-                <MessageBubble key={message.id} message={message} streaming={streamingId === message.id} />
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  streaming={streamingId === message.id}
+                  agentName={config.agents.find((a) => a.id === (message.agentId ?? agentId))?.name}
+                />
               ))
             )}
           </div>
         </div>
 
         <Composer
+          agentName={agent?.name}
           onSend={send}
           onStop={() => abortRef.current?.abort()}
           busy={busy}

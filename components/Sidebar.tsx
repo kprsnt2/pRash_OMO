@@ -19,6 +19,7 @@ export function Sidebar({
   onNew,
   onDelete,
   onExport,
+  onExportOne,
   onImport,
   onClose,
   privacy,
@@ -30,6 +31,7 @@ export function Sidebar({
   onNew: () => void;
   onDelete: (id: string) => void;
   onExport: () => void;
+  onExportOne: (id: string) => void;
   onImport: (file: File) => void;
   onClose: () => void;
   privacy: boolean;
@@ -45,7 +47,7 @@ export function Sidebar({
         <div className="flex items-center justify-between px-4 py-4">
           <div>
             <div className="text-lg font-semibold tracking-tight">OneChat</div>
-            <div className="text-[11px] text-muted">agents \u00B7 models \u00B7 many attachments</div>
+            <div className="text-[11px] text-muted">agents {"\u00B7"} models {"\u00B7"} many attachments</div>
           </div>
           <button type="button" onClick={onClose} className="text-muted lg:hidden">
             x
@@ -79,6 +81,15 @@ export function Sidebar({
                     {conversation.mode === "privacy" ? "private \u00B7 " : ""}
                     {when(conversation.updatedAt)}
                   </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onExportOne(conversation.id)}
+                  className="text-muted opacity-0 transition group-hover:opacity-100 hover:text-accent"
+                  aria-label="export this chat"
+                  title="Download this chat as JSON - import it later to resume the session"
+                >
+                  {"\u2193"}
                 </button>
                 <button
                   type="button"

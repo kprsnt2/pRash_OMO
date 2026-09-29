@@ -19,9 +19,18 @@ export interface AgentSummaryView {
   starters: string[];
 }
 
+export interface ModelGroupView {
+  provider: string;
+  label: string;
+  available: boolean;
+  primary: string;
+  models: string[];
+}
+
 export interface ConfigResponse {
   agents: AgentSummaryView[];
   chain: Rung[];
+  models: ModelGroupView[];
   privacySafeProviders: string[];
   authRequired: boolean;
   anyProviderKey: boolean;
@@ -47,5 +56,7 @@ export interface UiMessage {
   attempts?: { provider: string; model: string; ok: boolean; status?: number; error?: string; ms: number }[];
   skipped?: { id: string; provider: string; reason: string }[];
   error?: string;
+  elapsedMs?: number;
+  agentId?: string;
   createdAt: number;
 }

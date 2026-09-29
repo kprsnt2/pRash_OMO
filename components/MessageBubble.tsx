@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Markdown } from "./Markdown";
 import type { UiMessage } from "@/lib/client/types";
 import { humanSize } from "@/lib/client/files";
+import { cancelSpeech, isSpeechSynthesisSupported, speakText } from "@/lib/client/speech";
+import { WorksheetPrintModal } from "./WorksheetPrintModal";
 
 function AttachmentChips({ message }: { message: UiMessage }) {
   const attachments = message.attachments ?? [];
@@ -25,10 +28,56 @@ function AttachmentChips({ message }: { message: UiMessage }) {
   );
 }
 
-export function MessageBubble({ message, streaming }: { message: UiMessage; streaming?: boolean }) {
+function formatMs(ms: number): string {
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+function estimateTokens(text: string): number {
+  return Math.max(1, Math.round(text.length / 4));
+}
+
+function routingExplanation(message: UiMessage): string {
+  const failed = (message.attempts ?? []).filter((a) => !a.ok);
+  const skipped = message.skipped ?? [];
+  if (failed.length === 0 && skipped.length === 0) return "";
+  const parts = [
+    ...failed.map(
+      (f) => `${f.provider} ${f.model}${f.status ? ` (HTTP ${f.status})` : ""}: ${f.error ?? "failed"} after ${formatMs(f.ms)}`,
+    ),
+    ...skipped.map((s) => `${s.provider}: ${s.reason}`),
+  ];
+  return `Auto-routed past ${parts.length} option(s) before this answer - ${parts.join("; ")}.`;
+}
+
+export function MessageBubble({
+  message,
+  streaming,
+  agentName,
+}: {
+  message: UiMessage;
+  streaming?: boolean;
+  agentName?: string;
+}) {
   const isUser = message.role === "user";
   const served = message.served;
   const failures = (message.attempts ?? []).filter((a) => !a.ok);
+  const [canSpeak, setCanSpeak] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  useEffect(() => {
+    setCanSpeak(isSpeechSynthesisSupported());
+    return () => cancelSpeech();
+  }, []);
+
+  function toggleSpeech() {
+    if (speaking) {
+      cancelSpeech();
+      setSpeaking(false);
+      return;
+    }
+    if (speakText(message.content, { onEnd: () => setSpeaking(false) })) setSpeaking(true);
+  }
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser ? (
@@ -36,7 +85,7 @@ export function MessageBubble({ message, streaming }: { message: UiMessage; stre
           {served ? "\u{1F916}" : "\u{2728}"}
         </div>
       ) : null}
-      <div className={`max-w-[min(760px,88%)] rounded-2xl border px-4 py-3 ${isUser ? "border-accent2/30 bg-accent2/10" : "border-line bg-panel/70"}`}>
+      <div className={`max-w-[min(980px,94%)] rounded-2xl border px-4 py-3 ${isUser ? "border-accent2/30 bg-accent2/10" : "border-line bg-panel/70"}`}>
         {isUser ? (
           <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{message.content}</div>
         ) : message.content ? (
@@ -63,19 +112,44 @@ export function MessageBubble({ message, streaming }: { message: UiMessage; stre
         ) : null}
 
         {served ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted">
-            <span className={`chip ${failures.length ? "border-amber-400/40 text-amber-200" : "border-emerald-400/30 text-emerald-200"}`}>
-              {served.label} \u00B7 {served.model}
-            </span>
-            {failures.length > 0 ? <span>{failures.length} provider(s) failed before this one</span> : null}
-            {(message.skipped ?? []).length > 0 ? (
-              <span title={(message.skipped ?? []).map((s) => `${s.provider}: ${s.reason}`).join("\n")}>
-                {(message.skipped ?? []).length} rung(s) skipped
+          <div className="mt-3 border-t border-line/70 pt-2 text-[11px] text-muted">
+            <div className="flex flex-wrap items-center gap-2">
+              {agentName ? <span>{agentName}</span> : null}
+              <span className={`chip ${failures.length ? "border-amber-400/40 text-amber-200" : "border-emerald-400/30 text-emerald-200"}`}>
+                {served.label} {"\u00B7"} {served.model}
               </span>
-            ) : null}
+              {message.elapsedMs !== undefined ? <span>{formatMs(message.elapsedMs)}</span> : null}
+              {message.content.length > 0 ? (
+                <span title="Estimated from the reply length until the provider reports exact usage">
+                  {message.content.length} chars {"\u00B7"} {"\u2248"} {estimateTokens(message.content)} tokens
+                </span>
+              ) : null}
+              {canSpeak && message.content.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={toggleSpeech}
+                  className="rounded-md border border-line px-2 py-0.5 text-muted hover:border-accent/50 hover:text-ink"
+                  title={speaking ? "Stop reading aloud" : "Read this reply aloud"}
+                >
+                  {speaking ? "stop" : "listen"}
+                </button>
+              ) : null}
+              {message.content.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setPrinting(true)}
+                  className="rounded-md border border-line px-2 py-0.5 text-muted hover:border-accent/50 hover:text-ink"
+                  title="Open a print-ready sheet - worksheets print with or without their answer key"
+                >
+                  print
+                </button>
+              ) : null}
+            </div>
+            {routingExplanation(message) ? <p className="mt-1 leading-relaxed">{routingExplanation(message)}</p> : null}
           </div>
         ) : null}
       </div>
+      {printing ? <WorksheetPrintModal content={message.content} onClose={() => setPrinting(false)} /> : null}
     </div>
   );
 }

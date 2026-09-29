@@ -1,6 +1,6 @@
 import { AGENTS } from "@/lib/agents/registry";
 import { extractAll } from "@/lib/attachments/extract";
-import { envChain, type ChatMode } from "@/lib/providers/config";
+import { entryForModel, envChain, withPinnedEntry, type ChatMode } from "@/lib/providers/config";
 import { AllProvidersFailedError, abortSignalFor, openFirstWorking } from "@/lib/providers/run";
 import type { Attachment, ChatMessage, ChatRequest, ChainEntry } from "@/lib/providers/types";
 import { planChain } from "@/lib/route/plan";
@@ -55,7 +55,10 @@ export async function POST(request: Request) {
   }
 
   const mode: ChatMode = body.mode === "privacy" ? "privacy" : "normal";
-  const hydrate = await hydrateAttachments(body.messages).catch(() => []);
+  // A failed extraction must not silently blank the whole turn: fall back to the text alone.
+  const hydrate: ChatMessage[] = await hydrateAttachments(body.messages).catch(() =>
+    body.messages.map((m) => ({ role: m.role, content: m.content })),
+  );
   const hasImages = hydrate.some((m) => (m.attachments ?? []).some((a) => a.kind === "image"));
   const chatMessages: ChatMessage[] = hydrate;
 
@@ -63,12 +66,16 @@ export async function POST(request: Request) {
   const messages: ChatMessage[] = [{ role: "system", content: system }, ...chatMessages];
 
   const entries = envChain(process.env);
+  // A model pinned in the picker may not be its provider's chain primary, so carry it explicitly and
+  // keep it at the head of the walk - the remaining rungs still serve as fallback if it fails.
+  const pinned = body.model && body.model !== "auto" ? entryForModel(body.model, process.env) : undefined;
+  const chainEntries = withPinnedEntry(entries, pinned);
   const plan = planChain({
-    entries,
+    entries: chainEntries,
     mode,
     hasImages,
     forceProvider: (body.provider as ChainEntry["provider"] | "auto") ?? "auto",
-    forceModel: body.model && body.model !== "auto" ? body.model : "auto",
+    forceModel: "auto",
   });
 
   if (plan.entries.length === 0) {

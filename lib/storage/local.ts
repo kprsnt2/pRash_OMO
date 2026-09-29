@@ -2,10 +2,13 @@ export interface StoredMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  attachments?: { id: string; name: string; mime: string; kind: string; size: number }[];
+  attachments?: { id: string; name: string; mime: string; kind: string; size: number; text?: string }[];
   served?: { provider: string; label: string; model: string };
   attempts?: { provider: string; model: string; ok: boolean; status?: number; error?: string; ms: number }[];
+  skipped?: { id: string; provider: string; reason: string }[];
   error?: string;
+  elapsedMs?: number;
+  agentId?: string;
   createdAt: number;
 }
 

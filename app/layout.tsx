@@ -12,10 +12,15 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+const THEME_BOOT = `try{var k="onechat.theme",s=localStorage.getItem(k);if(s!=="light"&&s!=="dark"){s=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";}document.documentElement.dataset.theme=s;}catch(e){}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-dvh">{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-dvh">
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+        {children}
+      </body>
     </html>
   );
 }
